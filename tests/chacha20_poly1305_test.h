@@ -10,3 +10,6 @@ void chacha20_test();
 
 // section A.3
 void poly1305_test();
+
+// 2.8.2 + A.5
+void aead_test();

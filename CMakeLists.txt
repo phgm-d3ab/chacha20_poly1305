@@ -9,11 +9,10 @@ set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS} -O3 -march=native")
 add_library(chacha20_poly1305 chacha20_poly1305.c)
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR})
 
-if (CMAKE_BUILD_TYPE MATCHES Debug)
-    add_executable(tests
-            tests/tests.c
-            tests/poly1305_test.c
-            tests/chacha20_test.c)
+add_executable(tests
+        tests/tests.c
+        tests/poly1305_test.c
+        tests/chacha20_test.c
+        tests/aead_test.c)
 
-    target_link_libraries(tests chacha20_poly1305)
-endif()
+target_link_libraries(tests chacha20_poly1305)

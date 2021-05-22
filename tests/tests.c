@@ -4,4 +4,5 @@ int main()
 {
     poly1305_test();
     chacha20_test();
+    aead_test();
 }

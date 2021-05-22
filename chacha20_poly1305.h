@@ -13,63 +13,34 @@ extern "C" {
 #endif
 
 
-/// * Poly1305 * ///
-
-// generate 128 bit tag using key
-void poly1305_tag(const uint8_t *key,
+// generate 128 bit tag using 256 bit key
+void poly1305_tag(const uint8_t key[32],
                   const uint8_t *data,
                   uint32_t len,
                   uint8_t tag[16]);
 
-
-/// * ChaCha20 * ///
-
-typedef struct
-{
-    uint32_t state[12];
-
-} chacha20_ctx;
-
-// initialize an instance of chacha20_ctx with 256 bit key
-void chacha20_init(chacha20_ctx *, const uint8_t *key);
-
-// set 96 bit nonce and counter
-void chacha20_nonce(chacha20_ctx *, const uint8_t *nonce, uint32_t counter);
-
-// use chacha20_ctx to encrypt data
-void chacha20_encrypt(const chacha20_ctx *, uint8_t *data, uint32_t len);
-
-// use chacha20_ctx to decrypt data
-void chacha20_decrypt(const chacha20_ctx *, uint8_t *data, uint32_t len);
+// encrypt/decrypt (xor keystream bytes) some data in-place
+// using 256 bit key, 96 bit nonce and block counter
+void chacha20_xor(const uint8_t key[32], const uint8_t nonce[12],
+                  uint32_t counter, uint8_t *data, uint32_t len);
 
 
-/// * AEAD * ///
+// encrypt some data and calculate authentication tag
+// data_len bytes of ciphertext is placed into output
+void chacha20_poly1305_encrypt(const uint8_t key[32], const uint8_t nonce[12],
+                               const uint8_t *aad, uint32_t aad_len,
+                               const uint8_t *data, uint32_t data_len,
+                               uint8_t *output, uint8_t tag[16]);
 
-typedef struct
-{
-    uint32_t constant;
-    uint64_t nonce;
-
-    uint8_t *aad;
-    uint32_t aad_len;
-
-    uint8_t *data;
-    uint32_t data_len;
-
-    uint8_t *tag;
-
-} aead_args;
-
-// encrypt data and compute authenticator
-void aead_encrypt(const uint8_t *key, const aead_args *);
-
-// authenticate and decrypt data
-// returns non-zero to indicate failure
-uint32_t aead_decrypt(const uint8_t *key, const aead_args *);
+// authenticate and decrypt some data
+// returns non-zero value to indicate failure
+uint32_t chacha20_poly1305_decrypt(const uint8_t key[32], const uint8_t nonce[12],
+                                   const uint8_t *aad, uint32_t aad_len,
+                                   const uint8_t *ciphertext, uint32_t cipher_len,
+                                   const uint8_t tag[12], uint8_t *output);
 
 
 #ifdef __cplusplus
 }
 #endif
-
 #endif // CHACHA20_POLY1305_H

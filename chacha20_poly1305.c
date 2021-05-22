@@ -1,7 +1,5 @@
 #include "chacha20_poly1305.h"
 
-///* utilities *///
-
 typedef uint8_t u8;
 typedef uint32_t u32;
 typedef uint64_t u64;
@@ -28,10 +26,12 @@ typedef uint64_t u64;
 )                           \
 
 // rotate x left by n bits
-#define rotl(x, n) (x << n) | (x >> (-n & 31))
+#define rotl(x, n) ((x << n) | (x >> (-n & 31)))
 
 
-///* chacha 20 *///
+///////////////////////////
+///     chacha20        ///
+///////////////////////////
 
 // "expand 32-byte k"
 #define CHACHA_CONSTANT1 0x61707865
@@ -77,67 +77,36 @@ static inline void chacha20_block(const u32 input[16], u8 output[64])
     }
 }
 
-void chacha20_init(chacha20_ctx *ctx, const u8 key[32])
+static inline void chacha20_state(const u8 key[32], const u32 block_counter, const u8 nonce[12], u32 state[16])
 {
-    // 256 bit key
-    ctx->state[0] = u8_u32le(key);
-    ctx->state[1] = u8_u32le((key + 4));
-    ctx->state[2] = u8_u32le((key + 8));
-    ctx->state[3] = u8_u32le((key + 12));
-    ctx->state[4] = u8_u32le((key + 16));
-    ctx->state[5] = u8_u32le((key + 20));
-    ctx->state[6] = u8_u32le((key + 24));
-    ctx->state[7] = u8_u32le((key + 28));
+    state[0] = CHACHA_CONSTANT1;
+    state[1] = CHACHA_CONSTANT2;
+    state[2] = CHACHA_CONSTANT3;
+    state[3] = CHACHA_CONSTANT4;
 
-    ctx->state[8] = 0;
-    ctx->state[9] = 0;
-    ctx->state[10] = 0;
-    ctx->state[10] = 0;
+    state[4] = u8_u32le(key);
+    state[5] = u8_u32le((key + 4));
+    state[6] = u8_u32le((key + 8));
+    state[7] = u8_u32le((key + 12));
+    state[8] = u8_u32le((key + 16));
+    state[9] = u8_u32le((key + 20));
+    state[10] = u8_u32le((key + 24));
+    state[11] = u8_u32le((key + 28));
+
+    state[12] = block_counter;
+
+    state[13] = u8_u32le(nonce);
+    state[14] = u8_u32le((nonce + 4));
+    state[15] = u8_u32le((nonce + 8));
+
 }
 
-void chacha20_nonce(chacha20_ctx *ctx,
-                    const u8 nonce[12],
-                    const u32 counter)
-{
-    ctx->state[8] = counter;
-
-    ctx->state[9] = u8_u32le(nonce);
-    ctx->state[10] = u8_u32le((nonce + 4));
-    ctx->state[11] = u8_u32le((nonce + 8));
-}
-
-/*
- *  encrypt buffer: XOR plaintext bytes with
- *  keystream bytes to get ciphertext
- */
-void chacha20_encrypt(const chacha20_ctx *ctx, u8 *buf, const u32 len)
+void chacha20_xor(const u8 key[32], const u8 nonce[12], const u32 counter, u8 *data, const u32 len)
 {
     u8 keystream[64] = {0};
-    u32 state[16] =
-            {
-                    CHACHA_CONSTANT1,
-                    CHACHA_CONSTANT2,
-                    CHACHA_CONSTANT3,
-                    CHACHA_CONSTANT4,
+    u32 state[16];
 
-                    // key
-                    ctx->state[0],
-                    ctx->state[1],
-                    ctx->state[2],
-                    ctx->state[3],
-                    ctx->state[4],
-                    ctx->state[5],
-                    ctx->state[6],
-                    ctx->state[7],
-
-                    // counter
-                    ctx->state[8],
-
-                    // nonce
-                    ctx->state[9],
-                    ctx->state[10],
-                    ctx->state[11],
-            };
+    chacha20_state(key, counter, nonce, state);
 
     const u32 aligned = align64(len);
     const u32 remaining = len - aligned;
@@ -150,7 +119,9 @@ void chacha20_encrypt(const chacha20_ctx *ctx, u8 *buf, const u32 len)
         state[12] += 1;
 
         for (u32 i = 0; i < 64; i++)
-            buf[n + i] ^= keystream[i];
+        {
+            data[n + i] ^= keystream[i];
+        }
     }
 
     if (remaining)
@@ -159,22 +130,15 @@ void chacha20_encrypt(const chacha20_ctx *ctx, u8 *buf, const u32 len)
 
         for (u32 i = 0; i < remaining; i++)
         {
-            buf[aligned + i] ^= keystream[i];
+            data[aligned + i] ^= keystream[i];
         }
     }
 }
 
-/*
- *  chacha20_encrypt() is applied to ciphertext
- *  to reverse it back to plaintext
- */
-void chacha20_decrypt(const chacha20_ctx *ctx, u8 *buf, const u32 len)
-{
-    chacha20_encrypt(ctx, buf, len);
-}
 
-
-///* poly1305 *///
+///////////////////////////
+///     poly1305        ///
+///////////////////////////
 
 static inline void poly_add(u32 a[5], const u32 b[5])
 {
@@ -265,16 +229,16 @@ static inline void poly_mul(u32 a[5], const u32 b[4])
 /*
  *  poly1305 process full blocks
  */
-static inline void poly_block(const u32 r[5],
-                              const u8 *buf,
+static inline void poly_block(const u32 r[4],
+                              const u8 input[16],
                               u32 accum[5])
 {
     u32 block[5] = {0};
 
-    block[0] = u8_u32le((buf));
-    block[1] = u8_u32le((buf + 4));
-    block[2] = u8_u32le((buf + 8));
-    block[3] = u8_u32le((buf + 12));
+    block[0] = u8_u32le((input));
+    block[1] = u8_u32le((input + 4));
+    block[2] = u8_u32le((input + 8));
+    block[3] = u8_u32le((input + 12));
 
     // add 2^128 to block
     block[4] = 1;
@@ -344,10 +308,7 @@ static inline void poly_final(u32 accum[5], const u32 s[5], u8 *output)
     u32_u8le(((u32) final[3]), (output + 12));
 }
 
-/*
- *  copy 256 bit key into internal representation
- */
-static void poly1305_init(u32 r[5], u32 s[5], const u8 key[32])
+static inline void poly1305_state(u32 r[4], u32 s[4], const u8 key[32])
 {
     r[0] = u8_u32le((key));
     r[1] = u8_u32le((key + 4));
@@ -372,16 +333,16 @@ static void poly1305_init(u32 r[5], u32 s[5], const u8 key[32])
  *  process a number of available blocks,
  *  process remaining bytes, output tag
  */
-void poly1305_tag(const u8 *key,
+void poly1305_tag(const u8 key[32],
                   const u8 *buf,
                   const u32 len,
                   u8 out[16])
 {
-    u32 r[5] = {0};
+    u32 r[4] = {0};
     u32 s[5] = {0};
     u32 accum[5] = {0};
 
-    poly1305_init(r, s, key);
+    poly1305_state(r, s, key);
 
     const u32 len_aligned = align16(len);
     const u32 remaining = len - len_aligned;
@@ -401,201 +362,196 @@ void poly1305_tag(const u8 *key,
 }
 
 
-///* AEAD_CHACHA20_POLY1305 *///
+///////////////////////////////////////
+///     chacha20_poly1305 AEAD      ///
+///////////////////////////////////////
 
 /*
  *  initialize the states generating poly1305
  *  one time key as described in section 2.6
  */
-static inline void aead_init(const u8 *key,
-                             const u32 constant,
-                             const u64 nonce,
+static inline void aead_init(const u8 key[32],
+                             const u8 nonce[12],
                              u32 chacha[16], u32 r[4], u32 s[4])
 {
-    chacha[0] = CHACHA_CONSTANT1;
-    chacha[1] = CHACHA_CONSTANT2;
-    chacha[2] = CHACHA_CONSTANT3;
-    chacha[3] = CHACHA_CONSTANT4;
+    chacha20_state(key, 0, nonce, chacha);
 
-    chacha[4] = u8_u32le(key);
-    chacha[5] = u8_u32le((key + 4));
-    chacha[6] = u8_u32le((key + 8));
-    chacha[7] = u8_u32le((key + 12));
-    chacha[8] = u8_u32le((key + 16));
-    chacha[9] = u8_u32le((key + 20));
-    chacha[10] = u8_u32le((key + 24));
-    chacha[11] = u8_u32le((key + 28));
-
-    chacha[12] = 0;
-    chacha[13] = constant;
-    chacha[14] = (u32) (nonce);
-    chacha[15] = (u32) (nonce >> 32);
-
-    u8 block[64] = {0};
+    u8 block[64];
     chacha20_block(chacha, block);
 
-    r[0] = u8_u32le((block));
-    r[1] = u8_u32le((block + 4));
-    r[2] = u8_u32le((block + 8));
-    r[3] = u8_u32le((block + 12));
+    // use this block for poly otk
+    poly1305_state(r, s, block);
 
-    r[0] &= 0x0fffffff;
-    r[1] &= 0x0ffffffc;
-    r[2] &= 0x0ffffffc;
-    r[3] &= 0x0ffffffc;
-
-    s[0] = u8_u32le((block + 16));
-    s[1] = u8_u32le((block + 20));
-    s[2] = u8_u32le((block + 24));
-    s[3] = u8_u32le((block + 28));
-
+    // counter
     chacha[12] = 1;
 }
 
-/*
- *  authenticate additional data
- */
-static inline void aead_aad(const u8 *data,
-                            const u32 len,
-                            u32 accum[5],
-                            u32 r[4])
+static inline void aead_poly_padded(const u8 *data,
+                                    const u32 len,
+                                    u32 accum[5],
+                                    u32 r[4])
 {
     const u32 aligned = align16(len);
     const u32 remaining = len - aligned;
 
-    for (u32 i = 0; i < aligned; i++)
+    for (u32 i = 0; i < aligned; i += 16)
     {
-        poly_block(r, data, accum);
+        poly_block(r, (data + i), accum);
     }
 
+    // pad and process one last block
     if (remaining)
     {
-        poly_tail(accum, r, data + aligned, remaining);
+        // zeroes are important
+        u8 block[16] = {0};
+        data += aligned;
+
+        for (u32 i = 0; i < remaining; i++)
+        {
+            block[i] = data[i];
+        }
+
+        poly_block(r, block, accum);
     }
 }
 
-void aead_encrypt(const u8 *key, const aead_args *args)
+/*
+ *  final parts of authentication tag input:
+ *  The length of the additional data in octets (as a 64-bit little-endian integer).
+ *  The length of the ciphertext in octets (as a 64-bit little-endian integer).
+ *
+ *  but since we are using u32, some of
+ *  these bytes will always remain zeroes
+ */
+static inline void aead_poly_final(const u32 aad_len, const u32 data_len, const u32 r[4], u32 accum[5])
+{
+    const u8 block[16] =
+            {
+                    (u8) (aad_len),
+                    (u8) (aad_len >> 8),
+                    (u8) (aad_len >> 16),
+                    (u8) (aad_len >> 24),
+                    0, 0, 0, 0,
+
+                    (u8) (data_len),
+                    (u8) (data_len >> 8),
+                    (u8) (data_len >> 16),
+                    (u8) (data_len >> 24),
+                    0, 0, 0, 0
+            };
+
+    poly_block(r, block, accum);
+}
+
+void chacha20_poly1305_encrypt(const uint8_t key[32], const uint8_t nonce[12],
+                               const u8 *aad, uint32_t aad_len,
+                               const u8 *data, uint32_t data_len,
+                               u8 *ciphertext, uint8_t tag[16])
 {
     u32 chacha[16] = {0};
     u8 keystream[64] = {0};
 
     u32 accum[5] = {0};
-    u32 r[5] = {0};
+    u32 r[4] = {0};
     u32 s[5] = {0};
 
-    aead_init(key, args->constant, args->nonce, chacha, r, s);
-    aead_aad(args->aad, args->aad_len, accum, r);
+    aead_init(key, nonce, chacha, r, s);
+    aead_poly_padded(aad, aad_len, accum, r);
 
-    /*
-     *  [        chacha        ]
-     *  [poly][poly][poly][poly]
-     */
-    u8 *data = args->data;
-    const u32 len_aligned = align64(args->data_len);
-    const u32 remaining = args->data_len - len_aligned;
+    const u32 len_aligned = align64(data_len);
+    const u32 remaining = data_len - len_aligned;
 
+    // [        chacha        ]
+    // [poly][poly][poly][poly]
     for (u32 n = 0; n < len_aligned; n += 64)
     {
         chacha20_block(chacha, keystream);
         chacha[12] += 1;
 
         for (u32 i = 0; i < 64; i++)
-            data[n + i] ^= keystream[i];
+        {
+            ciphertext[n + i] = (data[n + i] ^ keystream[i]);
+        }
 
-        poly_block(r, (data + n), accum);
-        poly_block(r, (data + n + 16), accum);
-        poly_block(r, (data + n + 32), accum);
-        poly_block(r, (data + n + 48), accum);
+        poly_block(r, (ciphertext + n), accum);
+        poly_block(r, (ciphertext + n + 16), accum);
+        poly_block(r, (ciphertext + n + 32), accum);
+        poly_block(r, (ciphertext + n + 48), accum);
     }
 
     // one last chacha keystream + poly blocks
     if (remaining)
     {
         data += len_aligned;
-        chacha20_block(chacha, keystream);
+        ciphertext += len_aligned;
 
+        chacha20_block(chacha, keystream);
         for (u32 n = 0; n < remaining; n++)
         {
-            data[n] ^= keystream[n];
+            ciphertext[n] = (data[n] ^ keystream[n]);
         }
 
-        const u32 poly_aligned = align16(remaining);
-        const u32 poly_remaining = remaining - poly_aligned;
-
-        for (u32 n = 0; n < poly_aligned; n += 16)
-        {
-            poly_block(r, data + n, accum);
-        }
-
-        if (poly_remaining)
-        {
-            poly_tail(accum, r, data + poly_aligned, poly_remaining);
-        }
+        aead_poly_padded(ciphertext, remaining, accum, r);
     }
 
-    poly_final(accum, s, args->tag);
+    aead_poly_final(aad_len, data_len, r, accum);
+    poly_final(accum, s, tag);
 }
 
-u32 aead_decrypt(const u8 *key, const aead_args *args)
+u32 chacha20_poly1305_decrypt(const uint8_t key[32], const uint8_t nonce[12],
+                              const uint8_t *aad, uint32_t aad_len,
+                              const uint8_t *ciphertext, uint32_t cipher_len,
+                              const uint8_t tag[12], uint8_t *output)
 {
     u32 chacha[16] = {0};
     u8 keystream[64] = {0};
 
     u32 accum[5] = {0};
-    u32 r[5] = {0};
+    u32 r[4] = {0};
     u32 s[5] = {0};
 
-    aead_init(key, args->constant, args->nonce, chacha, r, s);
-    aead_aad(args->aad, args->aad_len, accum, r);
+    aead_init(key, nonce, chacha, r, s);
+    aead_poly_padded(aad, aad_len, accum, r);
 
-    /*
-     *  [poly][poly][poly][poly]
-     *  [        chacha        ]
-     */
-    u8 *data = args->data;
-    const u32 len_aligned = align64(args->data_len);
-    const u32 remaining = args->data_len - len_aligned;
+    const u32 len_aligned = align64(cipher_len);
+    const u32 remaining = cipher_len - len_aligned;
 
+    // [poly][poly][poly][poly]
+    // [        chacha        ]
     for (u32 n = 0; n < len_aligned; n += 64)
     {
-        poly_block(r, (data + n), accum);
-        poly_block(r, (data + n + 16), accum);
-        poly_block(r, (data + n + 32), accum);
-        poly_block(r, (data + n + 48), accum);
+        poly_block(r, (ciphertext + n), accum);
+        poly_block(r, (ciphertext + n + 16), accum);
+        poly_block(r, (ciphertext + n + 32), accum);
+        poly_block(r, (ciphertext + n + 48), accum);
 
         chacha20_block(chacha, keystream);
         chacha[12] += 1;
 
         for (u32 i = 0; i < 64; i++)
-            data[n + i] ^= keystream[i];
+        {
+            output[n + i] = (ciphertext[n + i] ^ keystream[i]);
+        }
     }
 
+    // last poly blocks + one chacha
     if (remaining)
     {
-        data += len_aligned;
+        ciphertext += len_aligned;
+        output += len_aligned;
 
-        const u32 poly_aligned = align16(remaining);
-        const u32 poly_remaining = remaining - poly_aligned;
-
-        for (u32 n = 0; n < poly_aligned; n += 16)
-        {
-            poly_block(r, data + n, accum);
-        }
-
-        if (poly_remaining)
-        {
-            poly_tail(accum, r, data + poly_aligned, poly_remaining);
-        }
-
+        aead_poly_padded(ciphertext, remaining, accum, r);
         chacha20_block(chacha, keystream);
 
         for (u32 n = 0; n < remaining; n++)
         {
-            data[n] ^= keystream[n];
+            output[n] = (ciphertext[n] ^ keystream[n]);
         }
     }
 
-    // compare tags in constant time
+    aead_poly_final(aad_len, cipher_len, r, accum);
+
+    // finally, compare tags
     u8 tag_local[16] = {0};
     u32 diff = 0;
 
@@ -603,7 +559,7 @@ u32 aead_decrypt(const u8 *key, const aead_args *args)
 
     for (u32 i = 0; i < 16; i++)
     {
-        diff |= (tag_local[i] ^ args->tag[i]);
+        diff |= (tag_local[i] ^ tag[i]);
     }
 
     return diff;

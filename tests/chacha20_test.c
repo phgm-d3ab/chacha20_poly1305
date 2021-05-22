@@ -18,11 +18,7 @@ static u32 test_chacha(const u8 *key,
                        u8 *plaintext,
                        u32 len)
 {
-    chacha20_ctx ctx;
-
-    chacha20_init(&ctx, key);
-    chacha20_nonce(&ctx, nonce, block);
-    chacha20_encrypt(&ctx, plaintext, len);
+    chacha20_xor(key, nonce, block, plaintext, len);
 
     return memcmp(plaintext, ciphertext, len);
 }
