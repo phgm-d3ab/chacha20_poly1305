@@ -124,7 +124,7 @@ u32 aead_test1()
     return 0;
 }
 
-void aead_test()
+int aead_test()
 {
     const u32 vectors[] =
             {
@@ -136,5 +136,12 @@ void aead_test()
     {
         printf("[aead]     vector %u\t%s\n",
                i, vectors[i] ? "FAIL" : "OK");
+
+        if (vectors[i])
+        {
+            return 1;
+        }
     }
+
+    return 0;
 }

@@ -6,10 +6,10 @@
 #include "chacha20_poly1305.h"
 
 // section A.2
-void chacha20_test();
+int chacha20_test();
 
 // section A.3
-void poly1305_test();
+int poly1305_test();
 
 // 2.8.2 + A.5
-void aead_test();
+int aead_test();

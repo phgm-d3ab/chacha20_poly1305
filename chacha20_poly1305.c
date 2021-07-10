@@ -443,10 +443,10 @@ static inline void aead_poly_final(const u32 aad_len, const u32 data_len, const 
     poly_block(r, block, accum);
 }
 
-void chacha20_poly1305_encrypt(const uint8_t key[32], const uint8_t nonce[12],
-                               const u8 *aad, uint32_t aad_len,
-                               const u8 *data, uint32_t data_len,
-                               u8 *ciphertext, uint8_t tag[16])
+void chacha20_poly1305_encrypt(const u8 key[32], const u8 nonce[12],
+                               const u8 *aad, const u32 aad_len,
+                               const u8 *data, const u32 data_len,
+                               u8 *ciphertext, u8 tag[16])
 {
     u32 chacha[16] = {0};
     u8 keystream[64] = {0};
@@ -498,10 +498,10 @@ void chacha20_poly1305_encrypt(const uint8_t key[32], const uint8_t nonce[12],
     poly_final(accum, s, tag);
 }
 
-u32 chacha20_poly1305_decrypt(const uint8_t key[32], const uint8_t nonce[12],
-                              const uint8_t *aad, uint32_t aad_len,
-                              const uint8_t *ciphertext, uint32_t cipher_len,
-                              const uint8_t tag[12], uint8_t *output)
+u32 chacha20_poly1305_decrypt(const u8 key[32], const u8 nonce[12],
+                              const u8 *aad, const u32 aad_len,
+                              const u8 *ciphertext, const u32 cipher_len,
+                              const u8 tag[12], u8 *output)
 {
     u32 chacha[16] = {0};
     u8 keystream[64] = {0};

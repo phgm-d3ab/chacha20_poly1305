@@ -201,7 +201,7 @@ u32 chacha_test3()
     return test_chacha(key, nonce, block, ciphertext, plaintext, 127);
 }
 
-void chacha20_test()
+int chacha20_test()
 {
     const u32 vectors[] =
             {
@@ -215,5 +215,12 @@ void chacha20_test()
     {
         printf("[chacha20] vector %u\t%s\n",
                i, vectors[i] ? "FAIL" : "OK");
+
+        if (vectors[i])
+        {
+            return 1;
+        }
     }
+
+    return 0;
 }

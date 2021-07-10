@@ -342,7 +342,7 @@ u32 poly1305_test11()
     return test_poly(key, message, 48, result);
 }
 
-void poly1305_test()
+int poly1305_test()
 {
     const u32 vectors[] =
             {
@@ -364,5 +364,12 @@ void poly1305_test()
     {
         printf("[poly1305] vector %u\t%s\n",
                i, vectors[i] ? "FAIL" : "OK");
+
+        if (vectors[i])
+        {
+            return 1;
+        }
     }
+
+    return 0;
 }
