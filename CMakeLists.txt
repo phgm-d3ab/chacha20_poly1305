@@ -16,3 +16,4 @@ add_executable(rfc_tests
         tests/aead_test.c)
 
 target_link_libraries(rfc_tests chacha20_poly1305)
+add_test(NAME chacha20_poly1305_test COMMAND rfc_tests)
